@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>VR Villa</title>
+    <!-- Importing A-Frame -->
+    <script src="script/aframe.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background-color: #000;
+            overflow: hidden;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        /* PREMIUM LOADING SCREEN */
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 1s ease-out, visibility 1s;
+        }
+
+        .loader-content {
+            text-align: center;
+            color: white;
+        }
+
+        .loader-logo {
+            font-size: 3rem;
+            font-weight: 800;
+            margin-bottom: 20px;
+            letter-spacing: -2px;
+            background: linear-gradient(to right, #38bdf8, #818cf8);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-transform: uppercase;
+        }
+
+        .loader-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-left-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 1.2s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        .loader-status {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        .loader-progress {
+            width: 200px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            margin: 15px auto;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .loader-bar {
+            position: absolute;
+            height: 100%;
+            width: 40%;
+            background: #38bdf8;
+            border-radius: 2px;
+            animation: progress 2s infinite ease-in-out;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes progress {
+            0% {
+                left: -40%;
+            }
+
+            100% {
+                left: 100%;
+            }
+        }
+
+        #loading-overlay.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+
+        /* Hide A-Frame's default loading splash */
+        .a-loader-title {
+            display: none !important;
+        }
+
+        .a-canvas {
+            background-color: #000 !important;
+        }
+    </style>
+    <script>
+        AFRAME.registerComponent('modern-perimeter', {
+            schema: {
+                width: { type: 'number', default: 100 },
+                depth: { type: 'number', default: 100 },
+                height: { type: 'number', default: 3.5 },
+                gateWidth: { type: 'number', default: 12 }
+            },
+            init: function () {
+                const w = this.data.width;
+                const d = this.data.depth;
+                const h = this.data.height;
+                const gw = this.data.gateWidth;
+
+                const createWall = (x, z, ry, wallW) => {
+                    const wall = document.createElement('a-box');
+                    wall.setAttribute('position', `${x} ${h / 2} ${z}`);
+                    wall.setAttribute('rotation', `0 ${ry} 0`);
+                    wall.setAttribute('width', wallW);
+                    wall.setAttribute('height', h);
+                    wall.setAttribute('depth', 0.8);
+                    wall.setAttribute('material', 'src: #stone-tex; repeat: ' + wallW / 2 + ' 2; roughness: 0.8; color: #888');
+                    wall.setAttribute('shadow', 'cast: true; receive: true');
+                    this.el.appendChild(wall);
+                };
+
+                // North, West, East Walls (Solid)
+                createWall(0, -d / 2, 0, w); // North
+                createWall(-w / 2, 0, 90, d); // West
+                createWall(w / 2, 0, 90, d); // East
+
+                // South Walls (With Gate Gap at X=0)
+                const sWallW = (w - gw) / 2;
+                createWall(-(gw / 2 + sWallW / 2), d / 2, 0, sWallW); // South Left
+                createWall(gw / 2 + sWallW / 2, d / 2, 0, sWallW); // South Right
+
+                // Modern Gate Pillars
+                const createPillar = (px) => {
+                    const pillar = document.createElement('a-box');
+                    pillar.setAttribute('position', `${px} ${h / 2} ${d / 2}`);
+                    pillar.setAttribute('width', 1.2);
+                    pillar.setAttribute('height', h + 0.5);
+                    pillar.setAttribute('depth', 1.2);
+                    pillar.setAttribute('material', 'color: #333; roughness: 0.4; metalness: 0.5');
+                    this.el.appendChild(pillar);
+                };
+                createPillar(-gw / 2);
+                createPillar(gw / 2);
+
+                // Architectural Gate (Horizontal Slats)
+                const gate = document.createElement('a-entity');
+                gate.setAttribute('position', `0 0 ${d / 2}`);
+                const slatCount = 12;
+                for (let i = 0; i < slatCount; i++) {
+                    const slat = document.createElement('a-box');
+                    slat.setAttribute('position', `0 ${(h / slatCount) * i + 0.2} 0`);
+                    slat.setAttribute('width', gw - 0.2);
+                    slat.setAttribute('height', 0.15);
+                    slat.setAttribute('depth', 0.1);
+                    slat.setAttribute('material', 'color: #222; metalness: 0.8; roughness: 0.2');
+                    gate.appendChild(slat);
+                }
+                this.el.appendChild(gate);
+            }
+        });
+
+        AFRAME.registerComponent('water-ripple', {
+            schema: {
+                speed: { type: 'number', default: 1.0 },
+                intensity: { type: 'number', default: 0.05 }
+            },
+            tick: function (time, timeDelta) {
+                const mesh = this.el.getObject3D('mesh');
+                if (!mesh || !mesh.material || !mesh.material.map) return;
+
+                const t = time / 2000 * this.data.speed;
+                // Complex wave pattern
+                mesh.material.map.offset.x = Math.sin(t) * this.data.intensity + (t * 0.02);
+                mesh.material.map.offset.y = Math.cos(t * 0.8) * this.data.intensity + (t * 0.01);
+
+                // If there's a normal map, animate it too for better specular highlights
+                if (mesh.material.normalMap) {
+                    mesh.material.normalMap.offset.x = Math.cos(t * 0.5) * 0.02;
+                    mesh.material.normalMap.offset.y = Math.sin(t * 0.5) * 0.02;
+                }
+            }
+        });
+
+        AFRAME.registerComponent('flower-meadow', {
+            schema: {
+                count: { type: 'int', default: 200 },
+                area: { type: 'number', default: 46 } // Within the 100x100 fence
+            },
+            init: function () {
+                const el = this.el;
+                const data = this.data;
+                const batchSize = 10; // Load in batches to prevent UI freeze
+                let spawned = 0;
+
+                const spawnBatch = () => {
+                    const end = Math.min(spawned + batchSize, data.count);
+                    for (let i = spawned; i < end; i++) {
+                        const flower = document.createElement('a-entity');
+                        const x = (Math.random() - 0.5) * data.area * 2;
+                        const z = (Math.random() - 0.5) * data.area * 2;
+
+                        // Avoid spawning too close to the villa center
+                        if (Math.abs(x) < 20 && Math.abs(z) < 20) {
+                            // Re-roll or skip
+                            i--;
+                            continue;
+                        }
+
+                        const rotation = Math.random() * 360;
+                        const scale = 0.06 + Math.random() * 0.1;
+
+                        flower.setAttribute('gltf-model', '#flowers-wild-gltf');
+                        flower.setAttribute('position', `${x} 0.05 ${z}`);
+                        flower.setAttribute('rotation', `0 ${rotation} 0`);
+                        flower.setAttribute('scale', `${scale} ${scale} ${scale}`);
+                        flower.setAttribute('shadow', 'receive: true');
+                        el.appendChild(flower);
+                    }
+                    spawned = end;
+                    if (spawned < data.count) {
+                        setTimeout(spawnBatch, 100); // Small delay between batches
+                    }
+                };
+
+                // Start spawning after assets are likely ready
+                el.sceneEl.addEventListener('loaded', () => {
+                    setTimeout(spawnBatch, 1000);
+                });
+            }
+        });
+
+        AFRAME.registerComponent('lazy-load-model', {
+            schema: {
+                model: { type: 'string' },
+                delay: { type: 'number', default: 5000 }
+            },
+            init: function () {
+                const el = this.el;
+                const data = this.data;
+                el.sceneEl.addEventListener('loaded', () => {
+                    setTimeout(() => {
+                        el.setAttribute('gltf-model', data.model);
+                    }, data.delay);
+                });
+            }
+        });
+
+    </script>
+</head>
+
+<body>
+    <!-- Premium Loading Screen -->
+    <div id="loading-overlay">
+        <div class="loader-content">
+            <div class="loader-logo">VR Villa</div>
+            <div class="loader-spinner"></div>
+            <div class="loader-status">Initializing Luxury Environment</div>
+            <div class="loader-progress">
+                <div class="loader-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Smoothly hide loading screen when A-Frame scene is loaded
+        window.addEventListener('load', () => {
+            const scene = document.querySelector('a-scene');
+            const hideLoader = () => {
+                setTimeout(() => {
+                    document.getElementById('loading-overlay').classList.add('hidden');
+                }, 500);
+            };
+
+            if (scene.hasLoaded) {
+                hideLoader();
+            } else {
+                scene.addEventListener('loaded', hideLoader);
+            }
+        });
+    </script>
+    <a-scene renderer="physicallyCorrectLights: true; colorManagement: true; antialias: true; toneMapping: ACESFilmic"
+        shadow="type: pcfsoft" fog="type: exponential; color: #d1ebff; density: 0.005">
+
+        <!-- Load the 'modern_house' gltf model -->
+        <a-asset-item id="villa-gltf" src="assets/models/modern_house/scene.gltf"></a-asset-item>
+        <a-asset-item id="swimming-gltf" src="assets/models/swimming/scene.gltf"></a-asset-item>
+
+        <!-- Preload environment textures -->
+        <img id="sky-tex" src="assets/textures/sky.png">
+        <img id="grass-tex" src="assets/textures/grass_new.png">
+        <img id="wood-tex" src="assets/textures/wood_new.png">
+        <img id="stone-tex" src="assets/textures/stone_new.png">
+        <img id="water-tex" src="assets/textures/water_new.png">
+        <img id="marble-tex" src="assets/textures/marble_new.png">
+        <a-asset-item id="flowers-wild-gltf" src="assets/models/flowers/scene.gltf"></a-asset-item>
+
+        <!-- Preload essential car for Garage 1 only; others will lazy-load -->
+        <a-asset-item id="car-bmw-v" src="assets/models/bmw_vision_neue_klasse.glb"></a-asset-item>
+        <a-asset-item id="street-light-gltf" src="assets/models/street_light_lamp (1)/scene.gltf"></a-asset-item>
+        </a-assets>
+
+        <!-- Main Model positioned in front of the pool area with a clear interval -->
+        <!-- Main Model rotated so the right side faces the entrance/viewer -->
+        <a-entity id="villa-main" gltf-model="#villa-gltf" position="25 -0.870 -1.140" scale="1 1 1" rotation="0 90 0"
+            shadow="cast: true; receive: true">
+        </a-entity>
+
+
+
+        <!-- Architectural Perimeter Wall with Modern Architectural Gate -->
+        <a-entity modern-perimeter="width: 100; depth: 100; height: 3.5"></a-entity>
+
+        <!-- Ultra-Modern Architectural Garage & Cars -->
+        <a-entity id="garage-complex" position="-14 0 16" rotation="0 90 0">
+            <!-- Premium Foundation pad -->
+            <a-box width="24" height="0.15" depth="12" position="0 0.075 0"
+                material="src: #marble-tex; repeat: 8 4; roughness: 0.4" shadow="receive: true"></a-box>
+
+            <!-- Sleek Cantilever Roof with Underside Trim -->
+            <a-box width="24.5" height="0.6" depth="12.5" position="0 3.5 0" material="color: #111; roughness: 0.6"
+                shadow="cast: true; receive: true"></a-box>
+            <a-box width="23.8" height="0.1" depth="11.8" position="0 3.15 0" material="src: #wood-tex; repeat: 10 5"
+                shadow="receive: true"></a-box>
+
+            <!-- Recessed Garage Lights -->
+            <a-light type="point" color="#ffedd6" intensity="1.5" position="-6 3 0" distance="10" decay="2"></a-light>
+            <a-light type="point" color="#ffedd6" intensity="1.5" position="6 3 0" distance="10" decay="2"></a-light>
+
+            <!-- Solid Wooden Slat Back-Wall -->
+            <a-box width="24" height="3.5" depth="0.3" position="0 1.75 -5.85"
+                material="src: #wood-tex; repeat: 8 1; roughness: 0.9" shadow="cast: true; receive: true"></a-box>
+
+            <!-- Glass Side-Panels -->
+            <a-box width="0.1" height="3.5" depth="11.5" position="-11.95 1.75 0"
+                material="color: #9cc; opacity: 0.3; transparent: true; roughness: 0.1" shadow="cast: false"></a-box>
+            <a-box width="0.1" height="3.5" depth="11.5" position="11.95 1.75 0"
+                material="color: #9cc; opacity: 0.3; transparent: true; roughness: 0.1" shadow="cast: false"></a-box>
+
+            <!-- Front Steel Pillars -->
+            <a-box width="0.4" height="3.5" depth="0.4" position="-11.8 1.75 5.8"
+                material="color: #222; metalness: 0.8; roughness: 0.2" shadow="cast: true"></a-box>
+            <a-box width="0.4" height="3.5" depth="0.4" position="11.8 1.75 5.8"
+                material="color: #222; metalness: 0.8; roughness: 0.2" shadow="cast: true"></a-box>
+            <a-box width="0.4" height="3.5" depth="0.4" position="0 1.75 5.8"
+                material="color: #222; metalness: 0.8; roughness: 0.2" shadow="cast: true"></a-box>
+
+            <!-- The Fleet of Premium Cars (Garage 1) -->
+            <a-entity gltf-model="#car-bmw-v" position="-5 0.15 0" shadow="cast: true; receive: true"></a-entity>
+            <a-entity gltf-model="#car-bmw-v" position="5 0.15 0" shadow="cast: true; receive: true"
+                rotation="0 180 0"></a-entity>
+        </a-entity>
+
+        <!-- Second Ultra-Modern Architectural Garage (Facing Garage 1) -->
+        <a-entity id="garage-complex-2" position="40 0 16" rotation="0 -90 0">
+            <!-- Premium Foundation pad -->
+            <a-box width="24" height="0.15" depth="12" position="0 0.075 0"
+                material="src: #marble-tex; repeat: 8 4; roughness: 0.4" shadow="receive: true"></a-box>
+
+            <!-- Sleek Cantilever Roof with Underside Trim -->
+            <a-box width="24.5" height="0.6" depth="12.5" position="0 3.5 0" material="color: #111; roughness: 0.6"
+                shadow="cast: true; receive: true"></a-box>
+            <a-box width="23.8" height="0.1" depth="11.8" position="0 3.15 0" material="src: #wood-tex; repeat: 10 5"
+                shadow="receive: true"></a-box>
+
+            <!-- Recessed Garage Lights -->
+            <a-light type="point" color="#ffedd6" intensity="1.5" position="-6 3 0" distance="10" decay="2"></a-light>
+            <a-light type="point" color="#ffedd6" intensity="1.5" position="6 3 0" distance="10" decay="2"></a-light>
+
+            <!-- Solid Wooden Slat Back-Wall -->
+            <a-box width="24" height="3.5" depth="0.3" position="0 1.75 -5.85"
+                material="src: #wood-tex; repeat: 8 1; roughness: 0.9" shadow="cast: true; receive: true"></a-box>
+
+            <!-- Front Steel Pillars -->
+            <a-box width="0.4" height="3.5" depth="0.4" position="-11.8 1.75 5.8"
+                material="color: #222; metalness: 0.8; roughness: 0.2" shadow="cast: true"></a-box>
+            <a-box width="0.4" height="3.5" depth="0.4" position="11.8 1.75 5.8"
+                material="color: #222; metalness: 0.8; roughness: 0.2" shadow="cast: true"></a-box>
+            <a-box width="0.4" height="3.5" depth="0.4" position="0 1.75 5.8"
+                material="color: #222; metalness: 0.8; roughness: 0.2" shadow="cast: true"></a-box>
+
+            <!-- The Fleet of Cars (Garage 2) - Reuse high-fidelity model to save space -->
+            <a-entity lazy-load-model="model: assets/models/bmw_vision_neue_klasse.glb; delay: 8000"
+                position="-5 0.15 0" shadow="cast: true; receive: true"></a-entity>
+            <a-entity lazy-load-model="model: assets/models/bmw_vision_neue_klasse.glb; delay: 9000" position="5 0.15 0"
+                shadow="cast: true; receive: true" rotation="0 180 0"></a-entity>
+        </a-entity>
+
+        <!-- Surrounding Luxury Features -->
+        <!-- Front Main Driveway connecting garage 1 to the property edge -->
+        <a-plane position="-8 0.05 16" rotation="-90 0 0" width="12" height="24"
+            material="src: #stone-tex; repeat: 4 8; roughness: 0.8" shadow="receive: true"></a-plane>
+
+        <!-- Front Driveway connecting garage 2 to the property edge -->
+        <a-plane position="46 0.05 16" rotation="-90 0 0" width="12" height="24"
+            material="src: #stone-tex; repeat: 4 8; roughness: 0.8" shadow="receive: true"></a-plane>
+
+        <!-- Front Walkway to Villa -->
+        <a-plane position="0 0.06 8" rotation="-90 0 0" width="4" height="16"
+            material="src: #marble-tex; repeat: 1 4; roughness: 0.3" shadow="receive: true"></a-plane>
+
+        <!-- Backyard Luxury Infinity Pool (Shifted for Modern House) -->
+        <!-- Luxury Model Swimming Pool (Vertical Alignment Beside Villa) -->
+        <a-entity id="back-swimming-pool" gltf-model="#swimming-gltf" position="38 0.76 -12" rotation="0 0 0"
+            scale="1.2 1.2 1.2" shadow="cast: true; receive: true">
+
+            <!-- High-End Animated Water System - Re-oriented and Contained -->
+            <a-plane position="0 0.15 0" rotation="-90 0 0" width="3.8" height="8.2"
+                material="src: #water-tex; repeat: 2 4; transparent: true; opacity: 0.7; roughness: 0.05; metalness: 0.8; color: #4fc3f7"
+                water-ripple="speed: 1.5; intensity: 0.08">
+            </a-plane>
+
+            <a-plane position="0 0.10 0" rotation="-90 0 0" width="3.8" height="8.2"
+                material="src: #water-tex; repeat: 4 8; transparent: true; opacity: 0.4; roughness: 0.1; color: #01579b"
+                water-ripple="speed: 0.8; intensity: 0.03">
+            </a-plane>
+
+            <!-- Interactive Decor: Floating Apple (Physics Demo) -->
+            <a-sphere position="0 0.25 0" radius="0.15" color="#e74c3c"
+                animation="property: position; to: 0 0.35 0; dir: alternate; dur: 2000; loop: true; easing: easeInOutSine">
+                <a-light type="point" intensity="0.2" distance="1" color="#fff"></a-light>
+            </a-sphere>
+        </a-entity>
+
+        <!-- Maintain luxury landscape features around original pool area (now unified) -->
+
+        <!-- Maintain animated procedural pool system for luxury landscape -->
+
+
+        <!-- Environment (Restored Sky Texture) -->
+        <a-sky src="#sky-tex"></a-sky>
+
+        <!-- Procedural Wildflower Meadow: 200 instances within the fence -->
+        <a-entity flower-meadow="count: 200; area: 46"></a-entity>
+
+        <!-- Premium Street Lighting at Vantage Points -->
+        <a-entity id="street-lights">
+            <!-- Near Main Entrance/Gate -->
+            <a-entity gltf-model="#street-light-gltf" position="-16 0 48" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+            <a-entity gltf-model="#street-light-gltf" position="0 0 48" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+            <a-entity gltf-model="#street-light-gltf" position="48 0 48" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+
+            <!-- Along Driveways -->
+            <a-entity gltf-model="#street-light-gltf" position="-16 0 20" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+            <a-entity gltf-model="#street-light-gltf" position="52 0 20" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+
+            <!-- Near Villa Front -->
+            <a-entity gltf-model="#street-light-gltf" position="12 0 10" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+
+            <!-- Near Pool Area (Backyard) -->
+            <a-entity gltf-model="#street-light-gltf" position="-22 0 -30" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+            <a-entity gltf-model="#street-light-gltf" position="22 0 -30" scale="0.05 0.05 0.05" shadow="cast: true">
+                <a-light type="point" color="#fff" intensity="2" distance="15" position="0 180 0"></a-light>
+                <a-sphere position="0 180 0" radius="5"
+                    material="emissive: #fff; emissiveIntensity: 2; color: #fff"></a-sphere>
+            </a-entity>
+        </a-entity>
+
+        <!-- Ground Plane -->
+        <a-plane material="src: #grass-tex; repeat: 100 100; roughness: 0.9" rotation="-90 0 0" width="300" height="300"
+            shadow="receive: true">
+        </a-plane>
+
+        <!-- Camera Rig -->
+        <a-entity id="rig" position="0 1.6 5">
+            <a-camera wasd-controls="acceleration: 65" look-controls="pointerLockEnabled: true">
+                <a-cursor color="#fff" fuse="false"></a-cursor>
+            </a-camera>
+        </a-entity>
+
+        <!-- Lighting for the scene (Sunny Weather) -->
+        <a-light type="ambient" color="#FFF" intensity="1.2"></a-light>
+        <a-light type="directional" color="#fffaee" intensity="4.5" position="-15 25 15" cast-shadow="true"
+            shadow="mapSize: 2048; bias: -0.001; cameraBottom: -30; cameraTop: 30; cameraLeft: -30; cameraRight: 30">
+        </a-light>
+    </a-scene>
+</body>
+
+</html>
